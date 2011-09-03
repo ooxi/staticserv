@@ -1,0 +1,2 @@
+#!/bin/sh
+StaticServ -cert="/home/daniel/Certs/cert.pem" -key="/home/daniel/Certs/key.pem" -port=9500 $@
