@@ -1,0 +1,42 @@
+;
+; "Serve Here"
+;
+[version]
+signature="$CHICAGO$"
+
+[CmdHereInstall]
+CopyFiles = ServeHere.Files.Inf
+AddReg    = ServeHere.Reg
+
+[DefaultInstall]
+CopyFiles = ServeHere.Files.Inf
+AddReg    = ServeHere.Reg
+
+[DefaultUnInstall]
+DelFiles  = ServeHere.Files.Inf
+DelReg    = ServeHere.Reg
+
+[SourceDisksNames]
+55="Serve Here","",1
+
+[SourceDisksFiles]
+ServeHere.INF=55
+
+[DestinationDirs]
+ServeHere.Files.Inf = 17
+
+[ServeHere.Files.Inf]
+ServeHere.INF
+
+[ServeHere.Reg]
+HKLM,%UDHERE%,DisplayName,,"%ServeHereName%"
+HKLM,%UDHERE%,UninstallString,,"rundll32.exe syssetup.dll,SetupInfObjectInstallAction DefaultUninstall 132 %17%\ServeHere.inf"
+HKCR,Directory\Shell\ServeHere,,,"%ServeHereAccel%"
+HKCR,Directory\Shell\ServeHere\command,,,"C:\Program Files\StaticServ\StaticServ.exe -root=""%1"""
+HKCR,Drive\Shell\ServeHere,,,"%ServeHereAccel%"
+HKCR,Drive\Shell\ServeHere\command,,,"C:\Program Files\StaticServ\StaticServ.exe -root=""%1"""
+
+[Strings]
+ServeHereName="Serve Here"
+ServeHereAccel="&Serve Here"
+UDHERE="Software\Microsoft\Windows\CurrentVersion\Uninstall\ServeHere"
