@@ -1,19 +1,20 @@
 package main
 
 import (
-	"http"
-	"flag"
-	"os"
-	"io"
-	"strconv"
-	"fmt"
-	"path/filepath"
-	"path"
-	"strings"
-	"mime"
-	"json"
 	"bytes"
-	
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"mime"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"compress/gzip"
 	"encoding/base64"
 )
 
@@ -22,6 +23,8 @@ const CONFIG_APPEND = "Config.json"
 var port *int
 var root *string
 var workingDir string
+
+var useGzip *bool
 
 var cert *string
 var key *string
@@ -37,18 +40,18 @@ var realm *string
 
 var useAuth bool
 
-func getConfigFilePath() (string, os.Error) {
+func getConfigFilePath() (string, error) {
 	//Get Config filename
 	//remove any extension from executable, then append CONFIG_APPEND const ("Config.json")
 	// so StaticServ.exe OR StaticServ -> StaticServConfig.json
-	
+
 	exeAbsPath, err := filepath.Abs(os.Args[0])
 	if err != nil {
 		return "", err
 	}
 	dir, exe := filepath.Split(exeAbsPath)
 	ext := filepath.Ext(exe)
-	return filepath.Join(dir, exe[:len(exe) - len(ext)] + CONFIG_APPEND), nil
+	return filepath.Join(dir, exe[:len(exe)-len(ext)]+CONFIG_APPEND), nil
 }
 
 func printHelp() {
@@ -56,28 +59,31 @@ func printHelp() {
 }
 
 type config struct {
-	Port int
-	AllowOnly string
+	Port        int
+	AllowOnly   string
 	AllowUpload bool
-	UploadDir string
-	TlsCert string
-	TlsKey string
-	AuthUser string
-	AuthPass string
-	AuthRealm string
-	MimeMap map[string]string
+	UploadDir   string
+	TlsCert     string
+	TlsKey      string
+	UseGzip     bool
+	AuthUser    string
+	AuthPass    string
+	AuthRealm   string
+	MimeMap     map[string]string
 }
+
 func defaultConfig() *config {
-	return &config {
-		Port: 9000,
-		AllowOnly: "",
+	return &config{
+		Port:        9000,
+		AllowOnly:   "",
 		AllowUpload: false,
-		UploadDir: "",
-		TlsCert: "",
-		TlsKey: "",
-		AuthUser: "",
-		AuthPass: "",
-		AuthRealm: "",
+		UploadDir:   "",
+		TlsCert:     "",
+		TlsKey:      "",
+		UseGzip:     false,
+		AuthUser:    "",
+		AuthPass:    "",
+		AuthRealm:   "",
 		MimeMap: map[string]string{
 			".png": "image/png",
 			".apk": "application/vnd.android.package-archive",
@@ -94,14 +100,14 @@ func main() {
 	http.HandleFunc("/$up", runUp)
 	http.HandleFunc("/$choose", runChoose)
 	if *cert != "" && *key != "" {
-		var err = http.ListenAndServeTLS(":"+strconv.Itoa(*port), *cert, *key, server)
+		var err = http.ListenAndServeTLS(":"+strconv.Itoa(*port), *cert, *key, http.HandlerFunc(makeGzipHandler(server)))
 		if err != nil {
-			fmt.Printf("Could not start http server:\n%s", err.String())
+			fmt.Printf("Could not start http server:\n%s", err.Error())
 		}
 	} else {
-		var err = http.ListenAndServe(":"+strconv.Itoa(*port), server)
+		var err = http.ListenAndServe(":"+strconv.Itoa(*port), http.HandlerFunc(makeGzipHandler(server)))
 		if err != nil {
-			fmt.Printf("Could not start http server:\n%s", err.String())
+			fmt.Printf("Could not start http server:\n%s", err.Error())
 		}
 	}
 }
@@ -109,6 +115,32 @@ func main() {
 type fileHandler struct {
 	root   string
 	prefix string
+}
+
+type gzipResponseWriter struct {
+        io.Writer
+        http.ResponseWriter
+}
+
+func (w gzipResponseWriter) Write(b []byte) (int, error) {
+        return w.Writer.Write(b)
+}
+
+func makeGzipHandler(handler http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if *useGzip == false || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			handler.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		gz, err := gzip.NewWriter(w)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer gz.Close()
+		handler.ServeHTTP(gzipResponseWriter{Writer: gz, ResponseWriter: w}, r)
+	}
 }
 
 // FileServer returns a handler that serves HTTP requests
@@ -123,7 +155,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("Error: %s", err)
 		}
 	}()
-	
+
 	if useAuth {
 		auth, _ := isAuthorized(r)
 		if !auth {
@@ -131,7 +163,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	
+
 	urlPath := path.Clean(r.URL.Path)
 	//remove any prefix to the url path like /root/files.txt
 	if !strings.HasPrefix(urlPath, f.prefix) {
@@ -139,66 +171,65 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	urlPath = urlPath[len(f.prefix):]
-	
+
 	if len(*allowIP) > 0 {
 		ss := strings.Split(r.RemoteAddr, ":")
-	
-		if len(ss) < 1 || ss[0] != *allowIP  {
+
+		if len(ss) < 1 || ss[0] != *allowIP {
 			http.NotFound(w, r)
-			
+
 			fmt.Printf("DENY: %s  FOR: %s\n", r.RemoteAddr, urlPath)
 			return
 		}
 	}
 	fmt.Printf("ALLOW: %s  FOR: %s\n", r.RemoteAddr, urlPath)
-	
+
 	//remove request header to always serve fresh
 	r.Header.Del("If-Modified-Since")
-	
+
 	if *allowUpload {
 		switch urlPath {
-			case "/$choose": 
-				runChoose(w, r)
-				return
-			case "/$up": 
-				runUp(w, r)
-				return
+		case "/$choose":
+			runChoose(w, r)
+			return
+		case "/$up":
+			runUp(w, r)
+			return
 		}
 	}
 	
 	http.ServeFile(w, r, filepath.Join(f.root, filepath.FromSlash(urlPath)))
 }
 
-
 func isAuthorized(r *http.Request) (hasAuth, tried bool) {
 	hasAuth = false
 	tried = false
-	
+
 	a := r.Header.Get("Authorization")
 	if a == "" {
 		return
 	}
 	tried = true
-	
+
 	basic := "Basic "
 	index := strings.Index(a, basic)
 	if index < 0 {
 		return
 	}
-	
-	upString, err := base64.StdEncoding.DecodeString(a[index + len(basic):])
+
+	upString, err := base64.StdEncoding.DecodeString(a[index+len(basic):])
 	if err != nil {
 		return
 	}
 	up := strings.SplitN(string(upString), ":", 2)
-	if(len(up) != 2) {
+	if len(up) != 2 {
 		return
 	}
-	
-	if(*username != up[0] || *password != up[1]) {
+
+	if *username != up[0] || *password != up[1] {
 		return
 	}
-	
+
 	hasAuth = true
 	return
 }
@@ -219,7 +250,7 @@ func runUp(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer formFile.Close()
-	
+
 	//remove any directory names in the filename
 	//START: work around IE sending full filepath and manually get filename
 	itemHead := formHead.Header["Content-Disposition"][0]
@@ -228,32 +259,32 @@ func runUp(w http.ResponseWriter, req *http.Request) {
 	if fileIndex < 0 {
 		panic("runUp: no filename")
 	}
-	filename := itemHead[fileIndex + len(lookfor):]
+	filename := itemHead[fileIndex+len(lookfor):]
 	filename = filename[:strings.Index(filename, "\"")]
-	
+
 	slashIndex := strings.LastIndex(filename, "\\")
 	if slashIndex > 0 {
-		filename = filename[slashIndex + 1:]
+		filename = filename[slashIndex+1:]
 	}
 	slashIndex = strings.LastIndex(filename, "/")
 	if slashIndex > 0 {
-		filename = filename[slashIndex + 1:]
+		filename = filename[slashIndex+1:]
 	}
 	_, saveToFilename := filepath.Split(filename)
 	//END: work around IE sending full filepath
-	
+
 	//join the filename to the upload dir
 	saveToFilePath := filepath.Join(*uploadDir, saveToFilename)
-	
+
 	osFile, err := os.Create(saveToFilePath)
 	if err != nil {
-		panic(err.String())
+		panic(err.Error())
 	}
 	defer osFile.Close()
-	
+
 	count, err := io.Copy(osFile, formFile)
 	if err != nil {
-		panic(err.String())
+		panic(err.Error())
 	}
 	fmt.Printf("ALLOW: %s SAVE: %s (%d)\n", req.RemoteAddr, saveToFilename, count)
 	w.Write([]byte("Upload Complete for " + filename))
@@ -331,41 +362,42 @@ function uploadCanceled(event) {
 func init() {
 	defaultConfigFilePath, err := getConfigFilePath()
 	if err != nil {
-		panic(err.String())
+		panic(err.Error())
 	}
-	
+
 	//load config file here
 	config := defaultConfig()
-	
+
 	configFile, err := os.Open(defaultConfigFilePath)
 	if err == nil {
 		decode := json.NewDecoder(configFile)
 		decode.Decode(config)
 	}
-	
-	for ext, mimeType := range(config.MimeMap) {
+
+	for ext, mimeType := range config.MimeMap {
 		err := mime.AddExtensionType(ext, mimeType)
 		if err != nil {
-			panic(err.String())
+			panic(err.Error())
 		}
 	}
-	
+
 	if workingDir, err = os.Getwd(); err != nil {
-		panic(err.String())
+		panic(err.Error())
 	}
-	
+
 	port = flag.Int("port", config.Port, "HTTP port number")
 	root = flag.String("root", workingDir, "Doc Root")
-	
-	
+
 	cert = flag.String("cert", config.TlsCert, "TLS cert.pem")
 	key = flag.String("key", config.TlsKey, "TLS key.pem")
 
 	allowIP = flag.String("allow", config.AllowOnly, "Only allow address to connect")
-	
+
+	useGzip = flag.Bool("gzip", config.UseGzip, "Use GZip compression when serving files")
+
 	allowUpload = flag.Bool("up", config.AllowUpload, "Allow uploads to /$choose, /$up")
 	uploadDir = flag.String("upTo", config.UploadDir, "Upload files to directory")
-	
+
 	username = flag.String("username", config.AuthUser, "Basic Auth Username")
 	password = flag.String("password", config.AuthPass, "Basic Auth Password")
 	realm = flag.String("realm", config.AuthRealm, "Basic Auth Realm")
@@ -374,33 +406,32 @@ func init() {
 	var help = flag.Bool("h", false, "Prints help")
 
 	flag.Parse()
-	
+
 	if *printConfig {
 		//print indented json config file
 		jsonBytes, err := json.Marshal(defaultConfig())
 		if err != nil {
-			panic(err.String())
+			panic(err.Error())
 		}
 		buffer := new(bytes.Buffer)
 		json.Indent(buffer, jsonBytes, "", "\t")
 		fmt.Printf("%s\n", buffer.String())
 		os.Exit(0)
 	}
-	
+
 	if *help {
 		printHelp()
 		os.Exit(0)
 	}
-	
+
 	*root, err = filepath.Abs(*root)
 	if err != nil {
-		panic(err.String())
+		panic(err.Error())
 	}
 	*uploadDir, err = filepath.Abs(*uploadDir)
 	if err != nil {
-		panic(err.String())
+		panic(err.Error())
 	}
-	
+
 	useAuth = (len(*username) != 0 || len(*password) != 0)
 }
-
