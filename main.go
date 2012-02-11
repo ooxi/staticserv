@@ -133,11 +133,7 @@ func makeGzipHandler(handler http.Handler) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Encoding", "gzip")
-		gz, err := gzip.NewWriter(w)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		gz := gzip.NewWriter(w)
 		defer gz.Close()
 		handler.ServeHTTP(gzipResponseWriter{Writer: gz, ResponseWriter: w}, r)
 	}

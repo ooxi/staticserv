@@ -32,9 +32,9 @@ ServeHere.INF
 HKLM,%UDHERE%,DisplayName,,"%ServeHereName%"
 HKLM,%UDHERE%,UninstallString,,"rundll32.exe syssetup.dll,SetupInfObjectInstallAction DefaultUninstall 132 %17%\ServeHere.inf"
 HKCR,Directory\Shell\ServeHere,,,"%ServeHereAccel%"
-HKCR,Directory\Shell\ServeHere\command,,,"C:\Program Files\StaticServ\StaticServ.exe -root=""%1"""
+HKCR,Directory\Shell\ServeHere\command,,,"C:\Program Files\StaticServ\staticserv.exe -root=""%1"""
 HKCR,Drive\Shell\ServeHere,,,"%ServeHereAccel%"
-HKCR,Drive\Shell\ServeHere\command,,,"C:\Program Files\StaticServ\StaticServ.exe -root=""%1"""
+HKCR,Drive\Shell\ServeHere\command,,,"C:\Program Files\StaticServ\staticserv.exe -root=""%1"""
 
 [Strings]
 ServeHereName="Serve Here"
