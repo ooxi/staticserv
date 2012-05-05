@@ -16,6 +16,8 @@ import (
 
 	"compress/gzip"
 	"encoding/base64"
+
+	"bitbucket.org/kardianos/osext"
 )
 
 const CONFIG_APPEND = "Config.json"
@@ -43,9 +45,9 @@ var useAuth bool
 func getConfigFilePath() (string, error) {
 	//Get Config filename
 	//remove any extension from executable, then append CONFIG_APPEND const ("Config.json")
-	// so StaticServ.exe OR StaticServ -> StaticServConfig.json
+	// so staticserv.exe OR staticserv -> StaticServConfig.json
 
-	exeAbsPath, err := filepath.Abs(os.Args[0])
+	exeAbsPath, err := osext.GetExePath()
 	if err != nil {
 		return "", err
 	}
