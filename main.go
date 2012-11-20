@@ -17,6 +17,8 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 
+	"archive/zip"
+
 	"bitbucket.org/kardianos/osext"
 )
 
@@ -39,6 +41,8 @@ var uploadDir *string
 var username *string
 var password *string
 var realm *string
+
+var allowZipDir *bool
 
 var useAuth bool
 
@@ -71,6 +75,7 @@ type config struct {
 	AuthUser    string
 	AuthPass    string
 	AuthRealm   string
+	AllowZip    bool
 	MimeMap     map[string]string
 }
 
@@ -86,6 +91,7 @@ func defaultConfig() *config {
 		AuthUser:    "",
 		AuthPass:    "",
 		AuthRealm:   "",
+		AllowZip:    true,
 		MimeMap: map[string]string{
 			".png": "image/png",
 			".apk": "application/vnd.android.package-archive",
@@ -120,12 +126,12 @@ type fileHandler struct {
 }
 
 type gzipResponseWriter struct {
-        io.Writer
-        http.ResponseWriter
+	io.Writer
+	http.ResponseWriter
 }
 
 func (w gzipResponseWriter) Write(b []byte) (int, error) {
-        return w.Writer.Write(b)
+	return w.Writer.Write(b)
 }
 
 func makeGzipHandler(handler http.Handler) http.HandlerFunc {
@@ -150,7 +156,7 @@ func FileServer(root, prefix string) http.Handler { return &fileHandler{root, pr
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Printf("Error: %s", err)
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		}
 	}()
 
@@ -195,8 +201,52 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	
-	http.ServeFile(w, r, filepath.Join(f.root, filepath.FromSlash(urlPath)))
+
+	serveFile := filepath.Join(f.root, filepath.FromSlash(urlPath))
+	fileStat, err := os.Stat(serveFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("Not Found: %s\n", serveFile)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error at file <%s>: %s\n", serveFile, err)
+		return
+	}
+
+	if fileStat.IsDir() && *allowZipDir && r.URL.Query().Get("o") == "zip" {
+		zipFileName := "file.zip"
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+zipFileName+`"`)
+
+		zw := zip.NewWriter(w)
+		defer zw.Close()
+		// Walk directory.
+		filepath.Walk(serveFile, func(path string, info os.FileInfo, err error) error {
+			if info.IsDir() {
+				return nil
+			}
+			// Remove base path, convert to forward slash.
+			zipPath := path[len(serveFile):]
+			ze, err := zw.Create(zipPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot create zip entry <%s>: %s\n", zipPath, err)
+				return err
+			}
+			file, err := os.Open(path)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot open file <%s>: %s\n", path, err)
+				return err
+			}
+			defer file.Close()
+
+			io.Copy(ze, file)
+			return nil
+		})
+
+		return
+	}
+
+	http.ServeFile(w, r, serveFile)
 }
 
 func isAuthorized(r *http.Request) (hasAuth, tried bool) {
@@ -399,6 +449,8 @@ func init() {
 	username = flag.String("username", config.AuthUser, "Basic Auth Username")
 	password = flag.String("password", config.AuthPass, "Basic Auth Password")
 	realm = flag.String("realm", config.AuthRealm, "Basic Auth Realm")
+
+	allowZipDir = flag.Bool("zip", config.AllowZip, "Zip children when URL query: ?o=zip")
 
 	var printConfig = flag.Bool("printConfig", false, "Prints default Config file")
 	var help = flag.Bool("h", false, "Prints help")
