@@ -186,7 +186,6 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	fmt.Printf("ALLOW: %s  FOR: %s\n", r.RemoteAddr, urlPath)
 
 	//remove request header to always serve fresh
 	r.Header.Del("If-Modified-Since")
@@ -206,6 +205,10 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fileStat, err := os.Stat(serveFile)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Ignore the common favicon request.
+			if strings.HasSuffix(serveFile, "favicon.ico") {
+				return
+			}
 			fmt.Printf("Not Found: %s\n", serveFile)
 			return
 		}
@@ -213,7 +216,15 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if fileStat.IsDir() && *allowZipDir && r.URL.Query().Get("o") == "zip" {
+	getZip := fileStat.IsDir() && *allowZipDir && r.URL.Query().Get("o") == "zip"
+	flags := []string{}
+	if getZip {
+		flags = append(flags, "zip")
+	}
+
+	fmt.Printf("ALLOW: %s  FOR: %s [%s]\n", r.RemoteAddr, urlPath, strings.Join(flags, ","))
+
+	if getZip {
 		zipFileName := "file.zip"
 		w.Header().Set("Content-Type", "application/zip")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+zipFileName+`"`)
