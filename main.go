@@ -238,7 +238,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			// Remove base path, convert to forward slash.
 			zipPath := path[len(serveFile):]
-			ze, err := zw.Create(zipPath)
+			ze, err := zw.Create(strings.Replace(zipPath, `\`, "/", -1))
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Cannot create zip entry <%s>: %s\n", zipPath, err)
 				return err
