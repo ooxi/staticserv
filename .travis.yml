@@ -1,0 +1,14 @@
+# Build target
+script:
+ - mc _ make
+
+# Install all required dependencies
+install:
+ - npm install -g mini-cross
+ - mc _ echo 'Install successful'
+
+language: node_js
+
+services:
+ - docker
+
