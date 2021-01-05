@@ -27,7 +27,11 @@ jobs:
     - name: Prepare build environment
       run: npx --package mini-cross mc --no-tty _ make clean
 
-    # Native compilation, test and upload
+    # Native compilation
     - name: Native Build
-      run: npx --package mini-cross mc --no-tty _ make clean build
+      run: npx --package mini-cross mc --no-tty _ make clean install-dependencies build-native
+
+    # Cross compilation
+    - name: Windows Build
+      run: npx --package mini-cross mc --no-tty _ make clean install-dependencies build-cross
 

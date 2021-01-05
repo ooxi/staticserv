@@ -1,2 +1,6 @@
 /go.sum
 /staticserv
+/staticserv (linux, amd64)
+/staticserv (linux, arm, 5)
+/staticserv (windows, 386).exe
+/staticserv (windows, amd64).exe
