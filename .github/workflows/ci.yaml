@@ -32,6 +32,6 @@ jobs:
       run: npx --package mini-cross mc --no-tty _ make clean install-dependencies build-native
 
     # Cross compilation
-    - name: Windows Build
+    - name: Cross Build
       run: npx --package mini-cross mc --no-tty _ make clean install-dependencies build-cross
 
