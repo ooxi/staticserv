@@ -1,4 +1,4 @@
-# staticserv
+# staticserv ![staticserv build status](https://github.com/ooxi/staticserv/workflows/CI/badge.svg)
 
 Simple HTTP server contained in on Go file. This repository is a mirror of
 [Daniel Theophanes'][kardianos] [Mercurial repository][staticserv-hg-repo]
