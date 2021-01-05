@@ -1,10 +1,9 @@
 ---
-base: ubuntu:18.04
+base: ubuntu:20.04
 install:
  - git
  - golang
  - make
- - mercurial
 publish:
  - 9000:9000
 ---

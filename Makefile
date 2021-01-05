@@ -1,14 +1,17 @@
 .PHONY: all
-all: clean build
+all: clean install-dependencies build
+
+
+.PHONY: install-dependencies
+install-dependencies:
+	go mod download
 
 
 .PHONY: clean
 clean:
-	if [ -d '/tmp/go' ]; then	\
-		rm -rf '/tmp/go';	\
+	if [ -f 'go.sum' ]; then	\
+		rm 'go.sum';		\
 	fi
-
-	mkdir '/tmp/go'
 
 	if [ -f 'staticserv' ]; then	\
 		rm 'staticserv';	\
@@ -17,8 +20,7 @@ clean:
 
 .PHONY: build
 build:
-	GOPATH='/tmp/go' GOBIN='/tmp/go/bin' go get
-	GOPATH='/tmp/go' GOBIN='/tmp/go/bin' go build
+	go build -o 'staticserv'
 
 
 .PHONY: run

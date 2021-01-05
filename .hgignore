@@ -1,7 +1,0 @@
-syntax:glob
-*.[568ao]
-*.ao
-*.so
-*.pem
-bin/*
-[568a].out
