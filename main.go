@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -46,6 +47,9 @@ var allowZipDir *bool
 
 var useAuth bool
 
+//go:embed LICENSE
+var license string
+
 func getConfigFilePath() (string, error) {
 	//Get Config filename
 	//remove any extension from executable, then append CONFIG_APPEND const ("Config.json")
@@ -62,6 +66,10 @@ func getConfigFilePath() (string, error) {
 
 func printHelp() {
 	flag.PrintDefaults()
+}
+
+func printLicense() {
+	fmt.Printf("%s", license)
 }
 
 type config struct {
@@ -466,6 +474,7 @@ func init() {
 
 	var printConfig = flag.Bool("printConfig", false, "Prints default Config file")
 	var help = flag.Bool("h", false, "Prints help")
+	var license = flag.Bool("license", false, "Prints license")
 
 	flag.Parse()
 
@@ -483,6 +492,11 @@ func init() {
 
 	if *help {
 		printHelp()
+		os.Exit(0)
+	}
+
+	if *license {
+		printLicense()
 		os.Exit(0)
 	}
 

@@ -2,8 +2,16 @@
 base: ubuntu:20.04
 install:
  - git
- - golang
  - make
+
+ - curl
+ - gzip
+ - tar
 publish:
  - 9000:9000
 ---
+#!/bin/bash
+
+curl --location 'https://golang.org/dl/go1.16beta1.linux-amd64.tar.gz' | sudo tar xz --directory='/opt'
+sudo ln -s '/opt/go/bin/go' '/usr/local/bin/go'
+
